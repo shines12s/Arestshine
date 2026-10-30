@@ -1,0 +1,36 @@
+# OriginClient Protocol Simulator v2 配置
+# 本目录独立运行，不依赖 OriginClient 的源码或 node_modules。
+
+web:
+  host: 127.0.0.1
+  port: 9130
+  open_browser: false
+
+mqtt:
+  host: 127.0.0.1
+  port: 3333
+  qos: 1
+  expected_client_id: "3"
+
+udp_video:
+  # v2 自带 test1.mp4；换视频时改成绝对路径即可。
+  video_path: "./test1.mp4"
+  loop: true
+  # 启动模拟器即开始 H.265 图传，方便一键联调。
+  start_on_launch: true
+  target_host: 127.0.0.1
+  target_port: 3334
+  width: 1280
+  height: 720
+  fps: 30
+  bitrate_kbps: 2000
+  gop: 30
+  fragment_payload_bytes: 1392
+  packet_loss_percent: 0
+
+protocol:
+  proto_file: "./proto/messages.proto"
+  # 与完整 UI 的当前机器人保持一致：红方 3 号步兵。
+  robot_id: 3
+  # 启动后自动发布推荐状态流（GameStatus/Robot*/Global*）。
+  auto_scenario: true

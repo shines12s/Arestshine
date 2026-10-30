@@ -1,0 +1,44 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# frontend build
+dist/
+.vite/
+*.local
+
+# tauri / rust
+src-tauri/target/
+src-tauri/vendor/
+**/*.rs.bk
+
+# python
+.venv/
+__pycache__/
+*.py[cod]
+python-packages/
+
+# logs / temp
+*.log
+*.tmp
+tmp/
+.cache/
+screenshots/
+
+# local binaries and packaged runtimes
+ffmpeg.exe
+ffprobe.exe
+ffplay.exe
+node.exe
+python.exe
+*.zip
+*.7z
+*.msi
+*.exe
+!scripts/*.ps1
+
+# ide / os
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,12 @@
+* text=auto
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.onnx binary
+*.mp4 binary
+*.woff binary
+*.woff2 binary
+*.dll binary
+*.exe binary

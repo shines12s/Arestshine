@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OriginClient 本地协议模拟器</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="scanlines" aria-hidden="true"></div>
+    <main class="shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">ROBOMASTER 2026 · V2.0.0</p>
+          <h1>本地通信协议模拟器</h1>
+          <p class="subtitle">独立 MQTT Broker / Protobuf 数据台 / 循环 H.265 UDP 图传</p>
+        </div>
+        <div class="hero-status">
+          <span id="broker-pill" class="pill offline"><i></i>MQTT 离线</span>
+          <span id="video-pill" class="pill offline"><i></i>图传停止</span>
+        </div>
+      </header>
+
+      <section class="quick-guide">
+        <div><span>MQTT</span><strong id="guide-mqtt">127.0.0.1:3333</strong></div>
+        <div><span>Client ID</span><strong id="guide-client-id">机器人 ID</strong></div>
+        <div><span>UDP 监听</span><strong id="guide-udp">0.0.0.0:3334</strong></div>
+        <div><span>配置文件</span><strong id="guide-config">config.yaml</strong></div>
+      </section>
+
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+      <section class="grid top-grid">
+        <article class="card broker-card">
+          <div class="card-heading">
+            <div>
+              <p class="kicker">TRANSPORT 01</p>
+              <h2>MQTT Broker</h2>
+            </div>
+            <span class="protocol-tag">MQTT 3.1.1 · QoS ≤ 1</span>
+          </div>
+          <div class="form-row two">
+            <label>监听地址<input id="broker-host" value="127.0.0.1" /></label>
+            <label>端口<input id="broker-port" type="number" min="1" max="65535" value="3333" /></label>
+          </div>
+          <div class="actions">
+            <button id="broker-restart" class="button secondary">重启 Broker</button>
+          </div>
+          <div class="subsection">
+            <div class="subheading"><span>已连接客户端</span><small id="client-count">0 个</small></div>
+            <div id="client-list" class="client-list"><span class="empty">等待 OriginClient 连接</span></div>
+            <p class="hint">正式赛场要求 Client ID 填机器人 ID；本地 Broker 为便于调试只提示、不拒绝。</p>
+          </div>
+        </article>
+
+        <article class="card scenario-card">
+          <div class="card-heading">
+            <div>
+              <p class="kicker">QUICK SCENARIO</p>
+              <h2>推荐状态流</h2>
+            </div>
+            <span id="scenario-count" class="counter">0 / 8</span>
+          </div>
+          <p class="card-copy">按协议频率连续发送比赛、机器人状态、模块与位置数据，适合快速检查整套 HUD。</p>
+          <div id="scenario-topics" class="topic-cloud"></div>
+          <div class="actions split">
+            <button id="scenario-start" class="button primary">启动推荐场景</button>
+            <button id="scenario-stop" class="button danger ghost">全部停止</button>
+          </div>
+        </article>
+      </section>
+
+      <section class="card demo-card">
+        <div class="card-heading">
+          <div>
+            <p class="kicker">SCENARIO 02</p>
+            <h2>基地 / 前哨演练</h2>
+          </div>
+          <span class="protocol-tag">10000 / 1000</span>
+        </div>
+        <p class="card-copy">
+          基地初始/上限 10000，前哨 1000。重建会把前哨归属切换到另一侧并设置为 500 血。
+        </p>
+        <div class="form-row two">
+          <label>前哨物理位置
+            <select id="demo-position">
+              <option value="red">红方位置</option>
+              <option value="blue">蓝方位置</option>
+            </select>
+          </label>
+          <label>重建归属
+            <select id="demo-owner">
+              <option value="blue">归蓝方</option>
+              <option value="red">归红方</option>
+            </select>
+          </label>
+        </div>
+        <div class="form-row">
+          <label>基地扣血目标
+            <select id="demo-base-position">
+              <option value="red">红方基地</option>
+              <option value="blue">蓝方基地</option>
+            </select>
+          </label>
+        </div>
+        <div class="actions">
+          <button id="demo-base-damage" class="button secondary">基地扣 2000</button>
+          <button id="demo-outpost-damage" class="button secondary">前哨扣 300</button>
+          <button id="demo-outpost-destroy" class="button danger ghost">击毁前哨</button>
+          <button id="demo-outpost-rebuild" class="button primary">重建并换归属</button>
+          <button id="demo-reset" class="button secondary">重置 10000/1000</button>
+        </div>
+        <p id="demo-status" class="hint">等待操作...</p>
+      </section>
+
+      <section class="card demo-card">
+        <div class="card-heading">
+          <div>
+            <p class="kicker">AIR / ROBOT</p>
+            <h2>机器人 / 空中系统演练</h2>
+          </div>
+          <span class="protocol-tag">4 AIR</span>
+        </div>
+        <p class="card-copy">
+          切换机器人 ID，修改机库数量与 4 个空中单元状态。状态由模拟器 Event 发送，客户端只展示。
+        </p>
+        <div class="form-row two">
+          <label>当前机器人
+            <select id="demo-robot">
+              <option value="1">红方1号重装 (1)</option>
+              <option value="3" selected>红方3号步兵 (3)</option>
+              <option value="4">红方4号步兵 (4)</option>
+              <option value="7">红方7号哨兵 (7)</option>
+              <option value="8">红方8号飞镖 (8)</option>
+              <option value="9">红方9号雷达 (9)</option>
+              <option value="6">红方空中系统 (6)</option>
+              <option value="101">蓝方1号重装 (101)</option>
+              <option value="103">蓝方3号步兵 (103)</option>
+              <option value="104">蓝方4号步兵 (104)</option>
+              <option value="107">蓝方7号哨兵 (107)</option>
+              <option value="108">蓝方8号飞镖 (108)</option>
+              <option value="109">蓝方9号雷达 (109)</option>
+              <option value="106">蓝方空中系统 (106)</option>
+            </select>
+          </label>
+          <label>机库数量
+            <input id="demo-hangar" type="number" min="0" max="8" value="4" />
+          </label>
+        </div>
+        <div class="form-row two">
+          <label class="checkbox-row">各机器人独立移动
+            <input id="demo-motion" type="checkbox" checked />
+          </label>
+          <label>全局速度倍率
+            <input id="demo-motion-speed" type="number" min="0.1" max="3" step="0.1" value="1" />
+          </label>
+        </div>
+        <div id="motion-robot-list" class="motion-robot-list"></div>
+        <p class="hint">每台机器人可单独开关、调速和换向；修改后立即由模拟器发送坐标。</p>
+        <div class="form-row two">
+          <label>AIR-01
+            <select id="demo-air-1"><option>READY</option><option>CHARGING</option><option>ACTIVE</option></select>
+          </label>
+          <label>AIR-02
+            <select id="demo-air-2"><option>READY</option><option>CHARGING</option><option>ACTIVE</option></select>
+          </label>
+        </div>
+        <div class="form-row two">
+          <label>AIR-03
+            <select id="demo-air-3"><option>READY</option><option selected>CHARGING</option><option>ACTIVE</option></select>
+          </label>
+          <label>AIR-04
+            <select id="demo-air-4"><option>READY</option><option selected>CHARGING</option><option>ACTIVE</option></select>
+          </label>
+        </div>
+        <div class="form-row two">
+          <label>地图 X
+            <input id="demo-position-x" type="number" step="0.1" value="14.2" />
+          </label>
+          <label>地图 Y
+            <input id="demo-position-y" type="number" step="0.1" value="7.5" />
+          </label>
+        </div>
+        <div class="actions">
+          <button id="demo-robot-apply" class="button secondary">切换机器人</button>
+          <button id="demo-air-apply" class="button primary">发送空中状态</button>
+          <button id="demo-position-apply" class="button secondary">发送地图位置</button>
+          <button id="demo-positions-apply" class="button secondary">发送已知坐标组</button>
+        </div>
+        <p id="demo-air-status" class="hint">等待操作...</p>
+      </section>
+
+      <section class="card demo-card">
+        <div class="card-heading">
+          <div>
+            <p class="kicker">BATTLE CONTROL</p>
+            <h2>战场控制度演练</h2>
+          </div>
+          <span class="protocol-tag">+1 / +3</span>
+        </div>
+        <p class="card-copy">
+          控制全部 2 个前哨阵地每秒 +1；控制全部 2 个基地阵地每秒 +3。累计值由模拟器计算并发送。
+        </p>
+        <div class="form-row two">
+          <label>红方基地
+            <select id="control-red-base-owner"><option value="red">红方归属</option><option value="blue">蓝方归属</option><option value="neutral">中立</option></select>
+          </label>
+          <label>控制状态
+            <select id="control-red-base-state"><option value="COMPLETE">完全控制</option><option value="TEMPORARY">临时控制</option><option value="NEUTRAL">未控制</option></select>
+          </label>
+        </div>
+        <div class="form-row two">
+          <label>蓝方基地
+            <select id="control-blue-base-owner"><option value="blue">蓝方归属</option><option value="red">红方归属</option><option value="neutral">中立</option></select>
+          </label>
+          <label>控制状态
+            <select id="control-blue-base-state"><option value="COMPLETE">完全控制</option><option value="TEMPORARY">临时控制</option><option value="NEUTRAL">未控制</option></select>
+          </label>
+        </div>
+        <div class="form-row two">
+          <label>红方前哨
+            <select id="control-red-outpost-owner"><option value="red">红方归属</option><option value="blue">蓝方归属</option><option value="neutral">中立</option></select>
+          </label>
+          <label>控制状态
+            <select id="control-red-outpost-state"><option value="COMPLETE">完全控制</option><option value="TEMPORARY">临时控制</option><option value="NEUTRAL">未控制</option></select>
+          </label>
+        </div>
+        <div class="form-row two">
+          <label>蓝方前哨
+            <select id="control-blue-outpost-owner"><option value="blue">蓝方归属</option><option value="red">红方归属</option><option value="neutral">中立</option></select>
+          </label>
+          <label>控制状态
+            <select id="control-blue-outpost-state"><option value="COMPLETE">完全控制</option><option value="TEMPORARY">临时控制</option><option value="NEUTRAL">未控制</option></select>
+          </label>
+        </div>
+        <div class="actions">
+          <button id="control-apply" class="button primary">应用阵地控制状态</button>
+        </div>
+        <p id="control-status" class="hint">控制度：红 0 · 蓝 0 · 增长 +0 / +0</p>
+      </section>
+
+      <section class="card mqtt-editor">
+        <div class="card-heading">
+          <div>
+            <p class="kicker">DATA CONSOLE</p>
+            <h2>Protobuf 消息编辑器</h2>
+          </div>
+          <div class="legend"><span class="down">↓ 服务器到客户端</span><span class="up">↑ 客户端到服务器</span></div>
+        </div>
+
+        <div class="editor-grid">
+          <div class="editor-sidebar">
+            <label>Topic / 消息类型
+              <select id="topic-select"></select>
+            </label>
+            <div id="message-meta" class="message-meta"></div>
+            <div>
+              <div class="subheading"><span>字段结构</span><small>camelCase JSON</small></div>
+              <div id="field-list" class="field-list"></div>
+            </div>
+          </div>
+          <div class="editor-main">
+            <div class="editor-toolbar">
+              <span>发送数据</span>
+              <button id="reset-preset" class="text-button">恢复示例</button>
+            </div>
+            <textarea id="payload-editor" spellcheck="false" aria-label="Protobuf JSON 数据"></textarea>
+            <div id="json-validation" class="validation ok">JSON 有效</div>
+            <div class="send-controls">
+              <label>频率 Hz<input id="send-frequency" type="number" min="0.1" max="100" step="0.1" value="1" /></label>
+              <label>QoS<select id="send-qos"><option value="1">1</option><option value="0">0</option></select></label>
+              <button id="publish-once" class="button secondary">发送一次</button>
+              <button id="schedule-start" class="button primary">开始定时发送</button>
+              <button id="schedule-stop" class="button danger ghost">停止此 Topic</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card video-card">
+        <div class="card-heading">
+          <div>
+            <p class="kicker">TRANSPORT 02</p>
+            <h2>循环视频 UDP 图传</h2>
+          </div>
+          <span class="protocol-tag">HEVC · 8 B 大端头 · ≤ 1400 B/包</span>
+        </div>
+        <p class="card-copy">读取本地视频并循环播放，实时转码为 H.265 Annex-B，再按帧编号、分片序号和帧总字节数分包。</p>
+
+        <div class="video-grid">
+          <div class="video-source">
+            <label class="wide">视频文件绝对路径
+              <input id="video-path" placeholder="/home/user/Videos/debug-video.mp4" />
+            </label>
+            <div class="form-row two">
+              <label>目标 IP<input id="video-host" value="127.0.0.1" /></label>
+              <label>目标端口<input id="video-port" type="number" value="3334" /></label>
+            </div>
+            <div class="check-row">
+              <label><input id="video-loop" type="checkbox" checked /> 循环播放</label>
+              <label><input id="video-save" type="checkbox" /> 同步写入 config.yaml</label>
+            </div>
+          </div>
+          <div class="video-encoding">
+            <div class="form-row four">
+              <label>宽<input id="video-width" type="number" value="1920" /></label>
+              <label>高<input id="video-height" type="number" value="1080" /></label>
+              <label>FPS<input id="video-fps" type="number" value="60" /></label>
+              <label>码率 kbps<input id="video-bitrate" type="number" value="4000" /></label>
+            </div>
+            <div class="form-row three">
+              <label>GOP<input id="video-gop" type="number" value="60" /></label>
+              <label>分片负载 B<input id="video-fragment" type="number" max="1392" value="1392" /></label>
+              <label>模拟丢包 %<input id="video-loss" type="number" min="0" max="100" step="0.1" value="0" /></label>
+            </div>
+          </div>
+        </div>
+
+        <div class="video-footer">
+          <div class="actions">
+            <button id="video-start" class="button primary">开始循环图传</button>
+            <button id="video-stop" class="button danger ghost">停止图传</button>
+          </div>
+          <div class="metrics">
+            <div><span>实际 FPS</span><strong id="metric-fps">0.0</strong></div>
+            <div><span>发送码率</span><strong id="metric-bitrate">0.00 Mbps</strong></div>
+            <div><span>视频帧</span><strong id="metric-frames">0</strong></div>
+            <div><span>UDP 包</span><strong id="metric-packets">0</strong></div>
+            <div><span>模拟丢包</span><strong id="metric-dropped">0</strong></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card log-card">
+        <div class="card-heading">
+          <div>
+            <p class="kicker">LIVE TRACE</p>
+            <h2>联调日志</h2>
+          </div>
+          <button id="clear-logs" class="text-button">清空日志</button>
+        </div>
+        <div id="log-list" class="log-list"></div>
+      </section>
+
+      <footer>
+        <span>独立进程 · 不加载 OriginClient 源码</span>
+        <span>Ctrl+C 安全退出</span>
+      </footer>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
